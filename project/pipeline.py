@@ -7,18 +7,26 @@ from io import BytesIO
 
 
 def downloadPhysicalActivity():
+    #download csv file
     df = pd.read_csv('https://data.cdc.gov/api/views/hn4x-zwk7/rows.csv?accessType=DOWNLOAD', sep=',')
+    #filter columns
     df = df[['YearStart', 'LocationDesc', 'Question', 'Data_Value', 'StratificationCategory1']]
+    #rename for merging
     df.rename(columns={'LocationDesc': 'State'}, inplace=True)
+    #filter lines
     df = df.loc[(df['YearStart'] == 2020) & (df['StratificationCategory1'] == 'Total') & (
                 df['Question'] == 'Percent of adults who engage in no leisure-time physical activity')]
     return df
 
 def downloadMentalHeahlt():
+    #download zip file
     r = requests.get('https://www.samhsa.gov/data/sites/default/files/reports/rpt44484/2022-nsduh-sae-tables-percent-CSVs/2022-nsduh-sae-tables-percent-CSVs.zip')
     zip_ref = ZipFile(BytesIO(r.content))
+    #load csv file
     df = pd.read_csv(zip_ref.open('NSDUHsaeExcelTab31-2022.csv'))
+    #name columns
     df.columns = df.iloc[4]
+    #delete unnecessary lines
     df = df.drop(labels=[0, 1, 2, 3, 4], axis=0)
     return df
 
@@ -28,5 +36,6 @@ if __name__ == '__main__':
     con = sql.connect('./../data/ProjectTable.sqlite')
     physical.to_sql('physicalActivity', con, if_exists='replace', index=False)
     mental.to_sql('mentalHealth', con, if_exists='replace', index=False)
+    #merge tables via common column State
     join = pd.merge(mental, physical, on='State', how='inner')
     join.to_sql('joinedTable', con, if_exists='replace', index=False)
