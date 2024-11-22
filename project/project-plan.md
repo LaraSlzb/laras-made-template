@@ -7,7 +7,7 @@ Impact of physical activities on mental health.
 ## Main Question
 
 <!-- Think about one main question you want to answer based on the data. -->
-1. Does the amount of physical activity have an impact mental health?
+1. Does the amount of physical activity have an impact on mental health?
 
 ## Description
 

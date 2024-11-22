@@ -13,9 +13,9 @@ This method downloads the CSV file physical Activity and extract it into a dataf
 '''
 @retry(tries=3, delay=10, logger=logging.getLogger())
 def downloadPhysicalActivityAndExtract():
-    df = pd.read_csv('https://data.cdc.gov/api/views/hn4x-zwk7/rows.csv?accessType=DOWNLOAD', sep=',')
+    pysicalActivityDf = pd.read_csv('https://data.cdc.gov/api/views/hn4x-zwk7/rows.csv?accessType=DOWNLOAD', sep=',')
     logging.info('CSV physical activity is successfully downloaded and extracted to a dataframe')
-    return df
+    return pysicalActivityDf
 
 
 '''
@@ -23,24 +23,21 @@ This method downloads the Zip file and extract the table 27 about mental health 
 '''
 @retry(tries=3, delay=10, logger=logging.getLogger())
 def downloadMentalHeahltAndExtract():
-    r = requests.get(
+    request = requests.get(
         'https://www.samhsa.gov/data/sites/default/files/reports/rpt32805/2019NSDUHsaeExcelPercents/2019NSDUHsaeExcelPercents/2019NSDUHsaeExcelCSVs.zip')
-    zip_ref = ZipFile(BytesIO(r.content))
-    df = pd.read_csv(zip_ref.open('NSDUHsaeExcelTab27-2019.csv'), encoding='Windows-1252')
+    zip_ref = ZipFile(BytesIO(request.content))
+    mentalHealthDf = pd.read_csv(zip_ref.open('NSDUHsaeExcelTab27-2019.csv'), encoding='Windows-1252')
     logging.info('Zip file mental health is successfully downloaded and extracted to a dataframe')
-    return df
+    return mentalHealthDf
 
 
 '''
 This method filters the dataframe physical activities to the needed rows and columns
 '''
-def filterColumnsAndRowsPhysicalActivities(df):
-    # filter columns
+def renameAndFilterColumnsAndRowsPhysicalActivities(df):
     df = df[['YearStart', 'LocationDesc', 'Question', 'Data_Value', 'StratificationCategory1']]
-    # rename for merging
     df = df.rename(columns={'LocationDesc': 'State'})
-    # filter lines
-    df = df.loc[(df['YearStart'] == 2019) & (df['StratificationCategory1'] == 'Total')]
+    df = df.loc[(df['YearStart'] == 2019) & (df['StratificationCategory1'] == 'Total') & (df['State'] != 'New Jersey')]
     logging.info('Dataframe physical activity is successfully filtered')
     return df
 
@@ -53,45 +50,66 @@ def reformatDfPhysicalHealth(df):
     sport150 = "Percent of adults who achieve at least 150 minutes a week of moderate-intensity aerobic physical activity or 75 minutes a week of vigorous-intensity aerobic physical activity and engage in muscle-strengthening activities on 2 or more days a week"
     sport300 = "Percent of adults who achieve at least 300 minutes a week of moderate-intensity aerobic physical activity or 150 minutes a week of vigorous-intensity aerobic activity (or an equivalent combination)"
     muscleSport = "Percent of adults who engage in muscle-strengthening activities on 2 or more days a week"
-    noSportdf = extractSingleQuestion(df, noSport)
-    sport150df = extractSingleQuestion(df, sport150)
-    sport300df = extractSingleQuestion(df, sport300)
-    muscleSportdf = extractSingleQuestion(df, muscleSport)
 
-    mergeddf = [noSportdf, sport150df, sport300df, muscleSportdf]
-    mergeddf = reduce(lambda left, right: pd.merge(left, right, on=['State'], how='outer'), mergeddf)
+    mergedDf = []
+    for question in [noSport, sport150, sport300, muscleSport]:
+        mergedDf.append(df, question)
+
+    mergedDf = reduce(lambda left, right: pd.merge(left, right, on=['State'], how='outer'), mergedDf)
     logging.info('Dataframe physical activity is successfully reformated')
-    return mergeddf
+    return mergedDf
 
 
 '''
 This method extract a single question and renames its value to the question.
 '''
 def extractSingleQuestion(df, question):
-    questiondf = df.loc[df['Question'] == question]
-    questiondf = questiondf[['State', 'Data_Value']]
-    return questiondf.rename(columns={'Data_Value': question})
+    questionDf = df.loc[df['Question'] == question]
+    questionDf = questionDf[['State', 'Data_Value']]
+    return questionDf.rename(columns={'Data_Value': question})
 
 
 '''
 This method filters the dataframe mental health to the needed rows and columns
 '''
-def filterColumnsAndRowsMentalHealth(df):
-    # name columns
+def renameAndFilterColumnsAndRowsMentalHealth(df):
     df.columns = df.iloc[4]
-    # delete unnecessary lines
-    df.drop(labels=[0, 1, 2, 3, 4], axis=0, inplace=True)
-    # filter columns
+    df.drop(labels=[0, 1, 2, 3, 4], axis=0, inplace=True)  # drop unstructured data
     df = df[['State', '18 or Older Estimate', '18 or Older 95% CI (Lower)', '18 or Older 95% CI (Upper)']]
+    df = df.rename(
+        columns={'18 or Older Estimate': 'Mental Health', '18 or Older 95% CI (Lower)': 'Mental Health CI Lower',
+                 '18 or Older 95% CI (Upper)': 'Mental Health CI Upper'})
     logging.info('Dataframe mental health is successfully filtered')
     return df
+
+
+'''
+This methods maps the percentages in the dataframe mental health to floats
+'''
+def mapMentalHealthValuesToDecimal(df):
+    percentageColumns = ['Mental Health', 'Mental Health CI Lower', 'Mental Health CI Upper']
+    for columnName in percentageColumns:
+        df[columnName] = df[columnName].map(lambda value: float(value.strip('%')))
+    logging.info('The values in the dataframe Mental Health were successfully transformed to floats')
+    return df
+
 
 '''
 This method checks if there are enough rows
 '''
-def checkDataframe(df):
-    if len(df) < 50:
+def checkDataframeLen(df):
+    if len(df) < 50 - 1:  # New Jersey is dropped as the data was not available
         raise ValueError('There are missing rows in the dataframe')
+
+
+'''
+This method checks if the percentage values are in the correct range
+'''
+def checkDataframeValues(df):
+    for columnName in df.columns:
+        if columnName != 'State':
+            if ~pd.Series(df[columnName]).between(0, 100).all():
+                raise ValueError('There are incorrect values in the dataframe')
 
 
 '''
@@ -103,27 +121,23 @@ def loadDfToSqlite(df, name, con):
 
 
 if __name__ == '__main__':
-    # Download data and extract to dataframe
     mentalDf = downloadMentalHeahltAndExtract()
     physicalDf = downloadPhysicalActivityAndExtract()
 
-    # filter columns and rows
-    mentalDf = filterColumnsAndRowsMentalHealth(mentalDf)
-    physicalDf = filterColumnsAndRowsPhysicalActivities(physicalDf)
+    mentalDf = renameAndFilterColumnsAndRowsMentalHealth(mentalDf)
+    physicalDf = renameAndFilterColumnsAndRowsPhysicalActivities(physicalDf)
 
-    # reformat dataframe physical health
     physicalDf = reformatDfPhysicalHealth(physicalDf)
 
-    #check dataframes
-    checkDataframe(physicalDf)
-    checkDataframe(mentalDf)
+    mentalDf = mapMentalHealthValuesToDecimal(mentalDf)
 
-    # Join tables on State and check number of rows
+    checkDataframeLen(physicalDf)
+    checkDataframeLen(mentalDf)
+    checkDataframeValues(physicalDf)
+    checkDataframeValues(mentalDf)
+
     joinedDf = pd.merge(mentalDf, physicalDf, on='State', how='inner')
-    checkDataframe(joinedDf)
+    checkDataframeLen(joinedDf)
 
-    # Load dataframes to a sqlite database
     con = sql.connect('./../data/ProjectTable.sqlite')
-    loadDfToSqlite(physicalDf, 'physicalActivity', con)
-    loadDfToSqlite(mentalDf, 'mentalHealth', con)
-    loadDfToSqlite(joinedDf, 'joinedTable', con)
+    loadDfToSqlite(joinedDf, 'CorrelationPaAndMh', con)
