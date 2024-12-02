@@ -53,7 +53,7 @@ def reformatDfPhysicalHealth(df):
 
     mergedDf = []
     for question in [noSport, sport150, sport300, muscleSport]:
-        mergedDf.append(df, question)
+        mergedDf.append(extractSingleQuestion(df, question))
 
     mergedDf = reduce(lambda left, right: pd.merge(left, right, on=['State'], how='outer'), mergedDf)
     logging.info('Dataframe physical activity is successfully reformated')
@@ -120,7 +120,7 @@ def loadDfToSqlite(df, name, con):
     logging.info(f'The dataframe was successfully loaded into the sqlite {name}')
 
 
-if __name__ == '__main__':
+def main():
     mentalDf = downloadMentalHeahltAndExtract()
     physicalDf = downloadPhysicalActivityAndExtract()
 
@@ -141,3 +141,7 @@ if __name__ == '__main__':
 
     con = sql.connect('./../data/ProjectTable.sqlite')
     loadDfToSqlite(joinedDf, 'CorrelationPaAndMh', con)
+
+
+if __name__ == '__main__':
+    main()
