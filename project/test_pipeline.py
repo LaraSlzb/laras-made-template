@@ -74,7 +74,7 @@ def test_pipeline():
 
 
 def helper_test_db():
-    con = sqlite3.connect('./../data/ProjectTable.sqlite')
+    con = sqlite3.connect('./data/ProjectTable.sqlite')
     curs = con.cursor()
 
     curs.execute("select * from CorrelationPaAndMh")
