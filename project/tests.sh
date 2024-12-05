@@ -1,2 +1,2 @@
 #!/bin/bash
-pytest ./test.py
+pytest ./test_pipeline.py
