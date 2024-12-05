@@ -19,4 +19,4 @@ jobs:
               python -m pip install -r ./requirements.txt
       - name: run tests
         run: |
-              ./project/pipeline.sh
+              ./project/tests.sh
