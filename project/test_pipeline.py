@@ -64,6 +64,8 @@ def test_mapMentalHealthValuesToDecimal_incorrectValues():
 
 def test_pipeline():
     path = './../data/ProjectTable.sqlite'
+    if os.path.exists(path):
+        os.remove(path)
 
     main()
 
