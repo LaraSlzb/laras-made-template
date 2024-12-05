@@ -1,3 +1,4 @@
+import os
 from functools import reduce
 import pandas as pd
 import sqlite3 as sql
@@ -139,7 +140,7 @@ def main():
     joinedDf = pd.merge(mentalDf, physicalDf, on='State', how='inner')
     checkDataframeLen(joinedDf)
 
-    con = sql.connect('./../data/ProjectTable.sqlite')
+    con = sql.connect('./data/ProjectTable.sqlite')
     loadDfToSqlite(joinedDf, 'CorrelationPaAndMh', con)
 
 
